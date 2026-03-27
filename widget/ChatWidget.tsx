@@ -345,6 +345,20 @@ export default function SearchWidget({ shop, appOrigin }: Props) {
     setVisible(true);
   }, [display, smartSearch]);
 
+  // When widgetType is 'embed', hide the bubble widget (user will add section manually)
+  // Also check if the theme section is present in the page
+  const isEmbedMode = display?.widgetType === 'embed';
+  
+  // Check if the Smart Search section is present in the page
+  const hasSectionInPage = typeof window !== 'undefined' && (
+    document.querySelector('.smart-search-icon-wrapper') !== null ||
+    document.querySelector('.smart-search-app-embed') !== null ||
+    document.querySelector('[data-smart-search-section]') !== null
+  );
+  
+  // Hide bubble if embed mode OR if section is present in the page
+  const shouldHideBubble = isEmbedMode || hasSectionInPage;
+
   if (!visible || !smartSearch) return null;
 
   return (
@@ -376,19 +390,23 @@ export default function SearchWidget({ shop, appOrigin }: Props) {
       `}</style>
 
       {/* Embedded search bar — sits above the bubble */}
-      <EmbeddedSearchBar
-        color={smartSearch.primaryColor}
-        position={smartSearch.bubblePosition}
-        onClick={() => setSearchPopupOpen(true)}
-      />
+      {!shouldHideBubble && (
+        <EmbeddedSearchBar
+          color={smartSearch.primaryColor}
+          position={smartSearch.bubblePosition}
+          onClick={() => setSearchPopupOpen(true)}
+        />
+      )}
 
       {/* Floating bubble — opens product search */}
-      <SearchBubble
-        color={smartSearch.primaryColor}
-        position={smartSearch.bubblePosition}
-        isOpen={searchPopupOpen}
-        onClick={() => setSearchPopupOpen(o => !o)}
-      />
+      {!shouldHideBubble && (
+        <SearchBubble
+          color={smartSearch.primaryColor}
+          position={smartSearch.bubblePosition}
+          isOpen={searchPopupOpen}
+          onClick={() => setSearchPopupOpen(o => !o)}
+        />
+      )}
 
       {searchPopupOpen && (
         <ProductSearchPopup

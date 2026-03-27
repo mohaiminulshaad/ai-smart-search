@@ -15,6 +15,7 @@ export interface DisplaySettings {
   enabled: boolean;
   displayOn: 'all' | 'home' | 'products' | 'cart';
   mobileVisible: boolean;
+  widgetType: 'bubble' | 'embed';
 }
 
 export interface ProductCard {

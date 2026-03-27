@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Page, Card, FormLayout, Select, Button, BlockStack,
-  InlineStack, Text, Banner, SkeletonBodyText, Checkbox,
+  InlineStack, Text, Banner, SkeletonBodyText, Checkbox, RadioButton,
 } from '@shopify/polaris';
 import { TitleBar, useAppBridge } from '@shopify/app-bridge-react';
 import { displaySettingsApi, type DisplaySettings as DisplaySettingsType } from '../api/display-settings';
@@ -13,9 +13,14 @@ const DISPLAY_OPTIONS = [
   { label: 'Cart Page',      value: 'cart' },
 ];
 
+const WIDGET_TYPE_OPTIONS = [
+  { label: 'Floating Bubble (Classic)',      value: 'bubble' },
+  { label: 'Search Icon (App Embed)',       value: 'embed' },
+];
+
 export default function DisplaySettings() {
   const shopify = useAppBridge();
-  const [settings, setSettings] = useState<DisplaySettingsType>({ enabled: true, displayOn: 'all', mobileVisible: true });
+  const [settings, setSettings] = useState<DisplaySettingsType>({ enabled: true, displayOn: 'all', mobileVisible: true, widgetType: 'bubble' });
   const [loading, setLoading]   = useState(true);
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState('');
@@ -60,6 +65,27 @@ export default function DisplaySettings() {
                 The search widget is <strong>disabled</strong> and will not appear on your storefront.
               </Banner>
             )}
+          </BlockStack>
+        </Card>
+
+        <Card>
+          <BlockStack gap="400">
+            <Text as="h3" variant="headingMd">Widget Type</Text>
+            <RadioButton
+              label="Floating Bubble (Classic)"
+              helpText="Shows a floating button that opens search popup"
+              checked={settings.widgetType === 'bubble'}
+              onChange={() => setSettings(p => ({ ...p, widgetType: 'bubble' }))}
+            />
+            <RadioButton
+              label="Search Icon (App Embed)"
+              helpText="Add a search icon to any section in your theme. Search for section in theme editor."
+              checked={settings.widgetType === 'embed'}
+              onChange={() => setSettings(p => ({ ...p, widgetType: 'embed' }))}
+            />
+            <Banner tone="info">
+              After selecting, <strong>click Save Display Settings button</strong> at the bottom to save your changes!
+            </Banner>
           </BlockStack>
         </Card>
 

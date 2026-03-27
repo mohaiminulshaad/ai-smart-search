@@ -1,0 +1,377 @@
+{% comment %} Smart Search - App Embed Block {% endcomment %}
+{% comment %} This block appears in Shopify's "App embeds" section {% endcomment %}
+
+{%- if block.settings.enable -%}
+  {% comment %} Render the search icon in the header/footer area {% endcomment %}
+  <div 
+    class="smart-search-app-embed"
+    data-shop="{{ request.host }}"
+    data-app-origin="{{ routes.root_url }}"
+    data-color="{{ block.settings.icon_color }}"
+    data-icon-size="{{ block.settings.icon_size }}"
+    data-smart-search-section
+  >
+    <style>
+      .smart-search-app-embed {
+        display: inline-block;
+        vertical-align: middle;
+      }
+      
+      .smart-search-embed-trigger {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 8px;
+        color: {{ block.settings.icon_color }};
+        transition: transform 0.2s ease, opacity 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      
+      .smart-search-embed-trigger:hover {
+        transform: scale(1.1);
+        opacity: 0.8;
+      }
+      
+      .smart-search-embed-trigger svg {
+        width: {{ block.settings.icon_size }}px;
+        height: {{ block.settings.icon_size }}px;
+      }
+      
+      /* Modal Styles */
+      .smart-search-embed-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        z-index: 99999;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: 80px;
+      }
+      
+      .smart-search-embed-modal.active {
+        display: flex;
+      }
+      
+      .smart-search-embed-content {
+        background: #fff;
+        border-radius: 18px;
+        width: 100%;
+        max-width: 560px;
+        margin: 0 16px;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.22);
+        overflow: hidden;
+      }
+      
+      .smart-search-embed-header {
+        background: linear-gradient(135deg, {{ block.settings.icon_color }}, {{ block.settings.icon_color | color_darken: 20 }});
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #fff;
+      }
+      
+      .smart-search-embed-header svg {
+        flex-shrink: 0;
+      }
+      
+      .smart-search-embed-title {
+        flex: 1;
+        font-weight: 700;
+        font-size: 15px;
+      }
+      
+      .smart-search-embed-close {
+        background: none;
+        border: none;
+        color: rgba(255, 255, 255, 0.8);
+        font-size: 20px;
+        cursor: pointer;
+        padding: 2px 4px;
+        border-radius: 6px;
+        line-height: 1;
+      }
+      
+      .smart-search-embed-close:hover {
+        background: rgba(255, 255, 255, 0.1);
+      }
+      
+      .smart-search-embed-input-wrap {
+        padding: 14px 16px 10px;
+      }
+      
+      .smart-search-embed-input-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 11px 14px;
+        background: #fafafa;
+        transition: border-color 0.15s;
+      }
+      
+      .smart-search-embed-input-container:focus-within {
+        border-color: {{ block.settings.icon_color }};
+      }
+      
+      .smart-search-embed-input {
+        flex: 1;
+        border: none;
+        outline: none;
+        background: transparent;
+        font-size: 15px;
+        color: #111827;
+      }
+      
+      .smart-search-embed-input::placeholder {
+        color: #9ca3af;
+      }
+      
+      .smart-search-embed-results {
+        max-height: 360px;
+        overflow-y: auto;
+        padding: 0 12px 12px;
+      }
+      
+      .smart-search-embed-result {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 8px;
+        border-radius: 10px;
+        cursor: pointer;
+        text-decoration: none;
+        color: inherit;
+      }
+      
+      .smart-search-embed-result:hover {
+        background: #f8fafc;
+      }
+      
+      .smart-search-embed-result-img {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        background: #f1f5f9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      
+      .smart-search-embed-result-img img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 10px;
+      }
+      
+      .smart-search-embed-result-info {
+        flex: 1;
+        min-width: 0;
+      }
+      
+      .smart-search-embed-result-title {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: #111827;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      
+      .smart-search-embed-result-price {
+        font-size: 13px;
+        font-weight: 700;
+        color: {{ block.settings.icon_color }};
+        margin-top: 3px;
+      }
+      
+      .smart-search-embed-empty {
+        text-align: center;
+        padding: 28px 0;
+        color: #9ca3af;
+        font-size: 14px;
+      }
+      
+      .smart-search-embed-footer {
+        padding: 8px 18px;
+        border-top: 1px solid #f1f5f9;
+        background: #fafafa;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: #9ca3af;
+      }
+    </style>
+
+    <button 
+      class="smart-search-embed-trigger" 
+      aria-label="Open search"
+      type="button"
+    >
+      <svg width="{{ block.settings.icon_size }}" height="{{ block.settings.icon_size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+    </button>
+
+    <div class="smart-search-embed-modal" id="smart-search-embed-modal">
+      <div class="smart-search-embed-content" role="dialog" aria-label="Search products">
+        <div class="smart-search-embed-header">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <span class="smart-search-embed-title">Search Products</span>
+          <button class="smart-search-embed-close" aria-label="Close">✕</button>
+        </div>
+        <div class="smart-search-embed-input-wrap">
+          <div class="smart-search-embed-input-container">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" class="smart-search-embed-input" placeholder="Search products..." />
+          </div>
+        </div>
+        <div class="smart-search-embed-results">
+          <div class="smart-search-embed-empty">
+            Type to search your store
+          </div>
+        </div>
+        <div class="smart-search-embed-footer">
+          <span>AI-powered product search</span>
+          <span>Press Esc to close</span>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function() {
+        if (window.__smartSearchEmbedInit) return;
+        window.__smartSearchEmbedInit = true;
+
+        const container = document.currentScript.closest('.smart-search-app-embed');
+        const trigger = container.querySelector('.smart-search-embed-trigger');
+        const modal = container.querySelector('.smart-search-embed-modal');
+        const input = modal.querySelector('.smart-search-embed-input');
+        const results = modal.querySelector('.smart-search-embed-results');
+        const closeBtn = modal.querySelector('.smart-search-embed-close');
+        
+        const shop = container.dataset.shop || window.location.host;
+        const appOrigin = container.dataset.appOrigin || window.location.origin;
+        const color = container.dataset.color || '#6366f1';
+        
+        let searchTimeout = null;
+
+        function openModal() {
+          modal.classList.add('active');
+          document.body.style.overflow = 'hidden';
+          setTimeout(() => input.focus(), 100);
+        }
+
+        function closeModal() {
+          modal.classList.remove('active');
+          document.body.style.overflow = '';
+          input.value = '';
+          results.innerHTML = '<div class="smart-search-embed-empty">Type to search your store</div>';
+        }
+
+        function doSearch(query) {
+          if (!query.trim()) {
+            results.innerHTML = '<div class="smart-search-embed-empty">Type to search your store</div>';
+            return;
+          }
+
+          results.innerHTML = '<div class="smart-search-embed-empty">Searching...</div>';
+
+          fetch(appOrigin + '/api/search/products', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Shop-Domain': shop
+            },
+            body: JSON.stringify({ query: query, limit: 8 })
+          })
+          .then(r => r.json())
+          .then(data => {
+            const products = data.results || [];
+            if (products.length === 0) {
+              results.innerHTML = '<div class="smart-search-embed-empty">No results for "' + query + '"</div>';
+              return;
+            }
+            
+            results.innerHTML = products.map(p => {
+              const price = p.price && p.price.min != null ? '$' + (p.price.min / 100).toFixed(2) : '';
+              return '<a href="/products/' + p.handle + '" class="smart-search-embed-result">' +
+                '<div class="smart-search-embed-result-img">' +
+                  (p.image ? '<img src="' + p.image + '" alt="' + p.title + '" />' : '') +
+                '</div>' +
+                '<div class="smart-search-embed-result-info">' +
+                  '<div class="smart-search-embed-result-title">' + p.title + '</div>' +
+                  (price ? '<div class="smart-search-embed-result-price">' + price + '</div>' : '') +
+                '</div>' +
+              '</a>';
+            }).join('');
+          })
+          .catch(() => {
+            results.innerHTML = '<div class="smart-search-embed-empty">Error searching</div>';
+          });
+        }
+
+        trigger.addEventListener('click', openModal);
+        closeBtn.addEventListener('click', closeModal);
+        modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
+        
+        input.addEventListener('input', function(e) {
+          if (searchTimeout) clearTimeout(searchTimeout);
+          searchTimeout = setTimeout(() => doSearch(e.target.value), 350);
+        });
+
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape' && modal.classList.contains('active')) closeModal();
+        });
+      })();
+    </script>
+  </div>
+{%- endif -%}
+
+{% comment %} Color filter for darkening - handled by CSS for simplicity {% endcomment %}
+{% comment %} Liquid color manipulation - handled by CSS for simplicity {% endcomment %}
+
+{% schema %}
+{
+  "name": "Smart Search (App Embed)",
+  "target": "body",
+  "settings": [
+    {
+      "type": "checkbox",
+      "id": "enable",
+      "default": true,
+      "label": "Enable Smart Search"
+    },
+    {
+      "type": "color",
+      "id": "icon_color",
+      "default": "#6366f1",
+      "label": "Accent color"
+    },
+    {
+      "type": "range",
+      "id": "icon_size",
+      "min": 16,
+      "max": 48,
+      "step": 2,
+      "default": 24,
+      "label": "Icon size (px)"
+    }
+  ]
+}
+{% endschema %}

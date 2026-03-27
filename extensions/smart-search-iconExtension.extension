@@ -1,0 +1,51 @@
+{
+  "name": "smart-search-icon",
+  "version": "1.0.0",
+  "platform_version": "2.0.0",
+  "handle": "smart-search-icon",
+  "description": "Add a search icon to open a product search popup",
+  "icon": "assets/icon.png",
+  "developer": {
+    "name": "Smart Search",
+    "email": "support@smartsearch.com"
+  },
+  "dependencies": {},
+  "settings": {
+    "name": "Smart Search Icon",
+    "blocks": [
+      {
+        "type": "app_embed",
+        "name": "Search Icon",
+        "settings": [
+          {
+            "key": "enable_search_icon",
+            "name": "Enable search icon",
+            "type": "checkbox",
+            "default": true
+          },
+          {
+            "key": "label",
+            "name": "Button label",
+            "type": "text",
+            "default": "Search"
+          },
+          {
+            "key": "icon_color",
+            "name": "Icon color",
+            "type": "color",
+            "default": "#6366f1"
+          },
+          {
+            "key": "icon_size",
+            "name": "Icon size (px)",
+            "type": "range",
+            "min": 16,
+            "max": 48,
+            "step": 2,
+            "default": 24
+          }
+        ]
+      }
+    ]
+  }
+}

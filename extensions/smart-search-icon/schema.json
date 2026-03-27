@@ -1,0 +1,58 @@
+{
+  "name": "Smart Search Icon",
+  "description": "Add a search icon to open a product search popup",
+  "sections": {
+    "smart-search-icon": {
+      "type": "smart-search-icon",
+      "blocks": [
+        {
+          "type": "icon",
+          "settings": [
+            {
+              "type": "checkbox",
+              "id": "enable_search_icon",
+              "default": true,
+              "label": "Enable search icon"
+            },
+            {
+              "type": "text",
+              "id": "label",
+              "default": "Search",
+              "label": "Button label"
+            },
+            {
+              "type": "color",
+              "id": "icon_color",
+              "default": "#6366f1",
+              "label": "Icon color"
+            },
+            {
+              "type": "range",
+              "id": "icon_size",
+              "min": 16,
+              "max": 48,
+              "step": 2,
+              "default": 24,
+              "label": "Icon size (px)"
+            },
+            {
+              "type": "image_picker",
+              "id": "custom_icon",
+              "label": "Custom icon (optional)"
+            }
+          ]
+        }
+      ],
+      "presets": [
+        {
+          "name": "Smart Search Icon",
+          "blocks": [
+            {
+              "type": "icon"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

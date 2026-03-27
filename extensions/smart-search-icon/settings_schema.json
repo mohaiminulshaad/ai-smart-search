@@ -1,0 +1,34 @@
+{
+  "name": "Smart Search",
+  "description": "AI-powered product search for your store",
+  "version": "1.0.0",
+  "settings": [
+    {
+      "name": "search_icon",
+      "type": "app_embed",
+      "settings": [
+        {
+          "name": "enable",
+          "type": "checkbox",
+          "label": "Enable Smart Search Icon",
+          "default": true
+        },
+        {
+          "name": "icon_color",
+          "type": "color",
+          "label": "Icon Color",
+          "default": "#6366f1"
+        },
+        {
+          "name": "icon_size",
+          "type": "range",
+          "label": "Icon Size (px)",
+          "min": 16,
+          "max": 48,
+          "step": 2,
+          "default": 24
+        }
+      ]
+    }
+  ]
+}
