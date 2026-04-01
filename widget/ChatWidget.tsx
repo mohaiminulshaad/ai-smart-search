@@ -39,6 +39,8 @@ function adjustColor(hex: string, pct: number): string {
 
 interface SearchProduct {
   title:     string;
+  handle?:   string;
+  url?:      string;
   price?:    { min?: number; max?: number };
   available: boolean;
   image?:    string;
@@ -70,19 +72,63 @@ function ProductSearchPopup({ color, shop, appOrigin, onClose }: PopupProps) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Shopify native predictive search — always works, no app backend needed
+  function shopifyNativeSearch(q: string): Promise<SearchProduct[]> {
+    return fetch(
+      `/search/suggest.json?q=${encodeURIComponent(q)}&resources[type]=product&resources[limit]=8`,
+      { headers: { Accept: 'application/json' } }
+    )
+      .then(r => r.json())
+      .then((data: any) => {
+        const items: any[] = data?.resources?.results?.products ?? [];
+        return items.map((p: any) => ({
+          title:     p.title ?? '',
+          handle:    p.handle ?? (p.url ?? '').replace('/products/', ''),
+          url:       p.url ?? '',
+          image:     p.featured_image?.url ?? p.image ?? null,
+          price:     { min: p.price != null ? parseFloat(p.price) : undefined },
+          available: true,
+        }));
+      });
+  }
+
   const doSearch = useCallback((q: string) => {
     if (!q.trim()) { setResults([]); setSearched(false); return; }
     setLoading(true);
-    fetch(`${appOrigin}/api/search/products`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Shop-Domain': shop, 'ngrok-skip-browser-warning': '1' },
-      body:    JSON.stringify({ query: q, limit: 8 }),
-    })
-      .then(r => r.json())
-      .then(data => { setResults(data.results || []); setSearched(true); })
-      .catch(() => { setResults([]); setSearched(true); })
-      .finally(() => setLoading(false));
-  }, [appOrigin, shop]);
+
+    const backendSearch = appOrigin
+      ? fetch(`${appOrigin}/api/search/products`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Shop-Domain': shop, 'ngrok-skip-browser-warning': '1' },
+          body:    JSON.stringify({ query: q, limit: 8 }),
+        })
+          .then(r => r.ok ? r.json() : Promise.reject('api-error'))
+          .then((data: any) => data.results ?? [])
+      : Promise.reject('no-origin');
+
+    backendSearch
+      .then((products: SearchProduct[]) => {
+        if (products.length > 0) {
+          setResults(products);
+          setSearched(true);
+          setLoading(false);
+        } else {
+          // Backend returned empty — fall back to Shopify native search
+          return shopifyNativeSearch(q).then(p => {
+            setResults(p);
+            setSearched(true);
+            setLoading(false);
+          });
+        }
+      })
+      .catch(() => {
+        // Backend unreachable — fall back to Shopify native search
+        shopifyNativeSearch(q)
+          .then(p => { setResults(p); setSearched(true); })
+          .catch(() => { setResults([]); setSearched(true); })
+          .finally(() => setLoading(false));
+      });
+  }, [appOrigin, shop]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const q = e.target.value;
@@ -94,7 +140,7 @@ function ProductSearchPopup({ color, shop, appOrigin, onClose }: PopupProps) {
   function formatPrice(price?: { min?: number; max?: number }) {
     if (!price || (price.min == null && price.max == null)) return '';
     const p = price.min ?? price.max ?? 0;
-    return `$${(p / 100).toFixed(2)}`;
+    return `$${p.toFixed(2)}`;
   }
 
   const grad = `linear-gradient(135deg, ${color}, ${adjustColor(color, -25)})`;
@@ -192,40 +238,45 @@ function ProductSearchPopup({ color, shop, appOrigin, onClose }: PopupProps) {
             </div>
           )}
 
-          {results.map((p, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              padding: '10px 8px', borderRadius: 10, cursor: 'pointer',
-              transition: 'background .12s',
-            }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#f8fafc'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-            >
-              <div style={{
-                width: 48, height: 48, borderRadius: 10, flexShrink: 0,
-                overflow: 'hidden', background: '#f1f5f9', border: '1px solid #e5e7eb',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                {p.image
-                  ? <img src={p.image} alt={p.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                }
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
-                  {formatPrice(p.price) && (
-                    <span style={{ fontSize: 13, fontWeight: 700, color }}>{formatPrice(p.price)}</span>
-                  )}
-                  <span style={{ fontSize: 11, fontWeight: 500, color: p.available ? '#16a34a' : '#dc2626' }}>
-                    {p.available ? '● In stock' : '● Out of stock'}
-                  </span>
-                  {p.vendor && <span style={{ fontSize: 11, color: '#9ca3af' }}>{p.vendor}</span>}
+          {results.map((p, i) => {
+            const handle = p.handle || (p.url ? p.url.replace('/products/', '') : '');
+            const href = handle ? `/products/${handle}` : (p.url || '#');
+            return (
+              <a key={i} href={href} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '10px 8px', borderRadius: 10, cursor: 'pointer',
+                textDecoration: 'none', color: 'inherit',
+                transition: 'background .12s',
+              }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#f8fafc'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+              >
+                <div style={{
+                  width: 48, height: 48, borderRadius: 10, flexShrink: 0,
+                  overflow: 'hidden', background: '#f1f5f9', border: '1px solid #e5e7eb',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {p.image
+                    ? <img src={p.image} alt={p.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  }
                 </div>
-              </div>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </div>
-          ))}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.title}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                    {formatPrice(p.price) && (
+                      <span style={{ fontSize: 13, fontWeight: 700, color }}>{formatPrice(p.price)}</span>
+                    )}
+                    <span style={{ fontSize: 11, fontWeight: 500, color: p.available ? '#16a34a' : '#dc2626' }}>
+                      {p.available ? '● In stock' : '● Out of stock'}
+                    </span>
+                    {p.vendor && <span style={{ fontSize: 11, color: '#9ca3af' }}>{p.vendor}</span>}
+                  </div>
+                </div>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </a>
+            );
+          })}
         </div>
 
         {/* Footer */}
@@ -242,65 +293,6 @@ function ProductSearchPopup({ color, shop, appOrigin, onClose }: PopupProps) {
   );
 }
 
-// ── Embedded Search Bar ───────────────────────────────────────────────────────
-interface EmbeddedBarProps {
-  color:    string;
-  position: 'bottom-right' | 'bottom-left';
-  onClick:  () => void;
-}
-
-function EmbeddedSearchBar({ color, position, onClick }: EmbeddedBarProps) {
-  const side = position === 'bottom-left' ? { left: '24px' } : { right: '24px' };
-  const grad = `linear-gradient(135deg, ${color}, ${adjustColor(color, -25)})`;
-
-  return (
-    <button
-      onClick={onClick}
-      aria-label="Open product search"
-      style={{
-        all:          'unset',
-        position:     'fixed',
-        bottom:       '94px',
-        ...side,
-        display:      'flex',
-        alignItems:   'center',
-        gap:          8,
-        background:   '#fff',
-        border:       `2px solid ${color}`,
-        borderRadius: 50,
-        padding:      '9px 16px 9px 12px',
-        cursor:       'pointer',
-        boxShadow:    `0 4px 20px ${color}30`,
-        zIndex:       2147483646,
-        fontFamily:   "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        transition:   'transform .18s, box-shadow .18s',
-        animation:    'ss-bar-in .3s ease',
-      }}
-      onMouseEnter={e => {
-        const el = e.currentTarget as HTMLElement;
-        el.style.transform = 'translateY(-2px)';
-        el.style.boxShadow = `0 8px 28px ${color}45`;
-      }}
-      onMouseLeave={e => {
-        const el = e.currentTarget as HTMLElement;
-        el.style.transform = 'translateY(0)';
-        el.style.boxShadow = `0 4px 20px ${color}30`;
-      }}
-    >
-      {/* Icon circle */}
-      <div style={{
-        width: 30, height: 30, borderRadius: '50%',
-        background: grad,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-      }}>
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="11" cy="11" r="7.5"/><line x1="16.5" y1="16.5" x2="21" y2="21"/>
-        </svg>
-      </div>
-      <span style={{ fontSize: 13.5, fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>Search products…</span>
-    </button>
-  );
-}
 
 export default function SearchWidget({ shop, appOrigin }: Props) {
   const [smartSearch,  setSmartSearch]  = useState<SmartSearchSettings | null>(null);
@@ -345,21 +337,12 @@ export default function SearchWidget({ shop, appOrigin }: Props) {
     setVisible(true);
   }, [display, smartSearch]);
 
-  // When widgetType is 'embed', hide the bubble widget (user will add section manually)
-  // Also check if the theme section is present in the page
-  const isEmbedMode = display?.widgetType === 'embed';
-  
-  // Check if the Smart Search section is present in the page
-  const hasSectionInPage = typeof window !== 'undefined' && (
-    document.querySelector('.smart-search-icon-wrapper') !== null ||
-    document.querySelector('.smart-search-app-embed') !== null ||
-    document.querySelector('[data-smart-search-section]') !== null
-  );
-  
-  // Hide bubble if embed mode OR if section is present in the page
-  const shouldHideBubble = isEmbedMode || hasSectionInPage;
+  // 'embed' = only show via Shopify App Embed block (no bubble)
+  // 'bubble' = floating circle only
+  // 'both'   = floating circle + App Embed block (both active)
+  const showBubble = display?.widgetType !== 'embed';
 
-  if (!visible || !smartSearch) return null;
+  if (!visible || !smartSearch || !showBubble) return null;
 
   return (
     <>
@@ -376,10 +359,6 @@ export default function SearchWidget({ shop, appOrigin }: Props) {
           from { opacity:0; }
           to   { opacity:1; }
         }
-        @keyframes ss-bar-in {
-          from { opacity:0; transform:translateY(8px); }
-          to   { opacity:1; transform:translateY(0);   }
-        }
         @keyframes ss-pulse {
           0%,100% { box-shadow: 0 4px 20px rgba(0,0,0,.25); }
           50%     { box-shadow: 0 4px 30px rgba(0,0,0,.35); }
@@ -389,24 +368,13 @@ export default function SearchWidget({ shop, appOrigin }: Props) {
         }
       `}</style>
 
-      {/* Embedded search bar — sits above the bubble */}
-      {!shouldHideBubble && (
-        <EmbeddedSearchBar
-          color={smartSearch.primaryColor}
-          position={smartSearch.bubblePosition}
-          onClick={() => setSearchPopupOpen(true)}
-        />
-      )}
-
-      {/* Floating bubble — opens product search */}
-      {!shouldHideBubble && (
-        <SearchBubble
-          color={smartSearch.primaryColor}
-          position={smartSearch.bubblePosition}
-          isOpen={searchPopupOpen}
-          onClick={() => setSearchPopupOpen(o => !o)}
-        />
-      )}
+      {/* Single floating bubble — opens product search */}
+      <SearchBubble
+        color={smartSearch.primaryColor}
+        position={smartSearch.bubblePosition}
+        isOpen={searchPopupOpen}
+        onClick={() => setSearchPopupOpen(o => !o)}
+      />
 
       {searchPopupOpen && (
         <ProductSearchPopup

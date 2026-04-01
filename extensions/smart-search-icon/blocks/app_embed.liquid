@@ -6,7 +6,7 @@
   <div 
     class="smart-search-app-embed"
     data-shop="{{ request.host }}"
-    data-app-origin="{{ routes.root_url }}"
+    data-app-origin="{{ app.url }}"
     data-color="{{ block.settings.icon_color }}"
     data-icon-size="{{ block.settings.icon_size }}"
     data-smart-search-section
@@ -255,6 +255,11 @@
 
     <script>
       (function() {
+        // ── Deduplication: hide any extra copies of this block beyond the first ──
+        var allWidgets = document.querySelectorAll('.smart-search-app-embed');
+        for (var d = 1; d < allWidgets.length; d++) {
+          allWidgets[d].style.display = 'none';
+        }
         if (window.__smartSearchEmbedInit) return;
         window.__smartSearchEmbedInit = true;
 
@@ -264,11 +269,10 @@
         const input = modal.querySelector('.smart-search-embed-input');
         const results = modal.querySelector('.smart-search-embed-results');
         const closeBtn = modal.querySelector('.smart-search-embed-close');
-        
+
         const shop = container.dataset.shop || window.location.host;
-        const appOrigin = container.dataset.appOrigin || window.location.origin;
-        const color = container.dataset.color || '#6366f1';
-        
+        const appOrigin = (container.dataset.appOrigin || '').replace(/\/$/, ''); // strip trailing slash
+
         let searchTimeout = null;
 
         function openModal() {
@@ -284,6 +288,56 @@
           results.innerHTML = '<div class="smart-search-embed-empty">Type to search your store</div>';
         }
 
+        function renderProducts(products) {
+          if (!products || products.length === 0) return '<div class="smart-search-embed-empty">No results found</div>';
+          return products.map(function(p) {
+            var priceNum = p.price && p.price.min != null ? parseFloat(p.price.min) : null;
+            var price = priceNum != null && !isNaN(priceNum) && priceNum > 0 ? '$' + priceNum.toFixed(2) : '';
+            var handle = p.handle || (p.url ? p.url.replace('/products/', '') : '');
+            var image = p.image || (p.featured_image && p.featured_image.url) || '';
+            var title = p.title || '';
+            return '<a href="/products/' + handle + '" class="smart-search-embed-result">' +
+              '<div class="smart-search-embed-result-img">' +
+                (image ? '<img src="' + image + '" alt="' + title.replace(/"/g, '&quot;') + '" loading="lazy" />' : '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>') +
+              '</div>' +
+              '<div class="smart-search-embed-result-info">' +
+                '<div class="smart-search-embed-result-title">' + title + '</div>' +
+                (price ? '<div class="smart-search-embed-result-price">' + price + '</div>' : '') +
+              '</div>' +
+            '</a>';
+          }).join('');
+        }
+
+        // Shopify native predictive search — always available, no app backend needed
+        function shopifySearch(query) {
+          return fetch('/search/suggest.json?q=' + encodeURIComponent(query) + '&resources[type]=product&resources[limit]=8', {
+            headers: { 'Accept': 'application/json' }
+          })
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var items = (data.resources && data.resources.results && data.resources.results.products) || [];
+            return items.map(function(p) {
+              // Shopify returns price as a decimal string in store currency (e.g. "19.99")
+              var priceVal = p.price != null ? parseFloat(p.price) : null;
+              return {
+                title: p.title,
+                handle: p.handle || (p.url ? p.url.replace('/products/', '') : ''),
+                image: (p.featured_image && p.featured_image.url) || p.image || null,
+                price: { min: priceVal },
+                url: p.url,
+              };
+            });
+          });
+        }
+
+        function showResults(products, query) {
+          if (!products || products.length === 0) {
+            results.innerHTML = '<div class="smart-search-embed-empty">No results for &ldquo;' + query + '&rdquo;</div>';
+          } else {
+            results.innerHTML = renderProducts(products);
+          }
+        }
+
         function doSearch(query) {
           if (!query.trim()) {
             results.innerHTML = '<div class="smart-search-embed-empty">Type to search your store</div>';
@@ -292,47 +346,44 @@
 
           results.innerHTML = '<div class="smart-search-embed-empty">Searching...</div>';
 
-          fetch(appOrigin + '/api/search/products', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Shop-Domain': shop
-            },
-            body: JSON.stringify({ query: query, limit: 8 })
-          })
-          .then(r => r.json())
-          .then(data => {
-            const products = data.results || [];
-            if (products.length === 0) {
-              results.innerHTML = '<div class="smart-search-embed-empty">No results for "' + query + '"</div>';
-              return;
-            }
-            
-            results.innerHTML = products.map(p => {
-              const price = p.price && p.price.min != null ? '$' + (p.price.min / 100).toFixed(2) : '';
-              return '<a href="/products/' + p.handle + '" class="smart-search-embed-result">' +
-                '<div class="smart-search-embed-result-img">' +
-                  (p.image ? '<img src="' + p.image + '" alt="' + p.title + '" />' : '') +
-                '</div>' +
-                '<div class="smart-search-embed-result-info">' +
-                  '<div class="smart-search-embed-result-title">' + p.title + '</div>' +
-                  (price ? '<div class="smart-search-embed-result-price">' + price + '</div>' : '') +
-                '</div>' +
-              '</a>';
-            }).join('');
-          })
-          .catch(() => {
-            results.innerHTML = '<div class="smart-search-embed-empty">Error searching</div>';
-          });
+          // Try AI vector search via app backend first; fall back to Shopify native on any failure/empty
+          if (appOrigin) {
+            fetch(appOrigin + '/api/search/products', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Shop-Domain': shop },
+              body: JSON.stringify({ query: query, limit: 8 })
+            })
+            .then(function(r) { return r.ok ? r.json() : Promise.reject('api-error'); })
+            .then(function(data) {
+              var products = data.results || [];
+              if (products.length > 0) {
+                results.innerHTML = renderProducts(products);
+              } else {
+                // Vector store empty — use Shopify native
+                return shopifySearch(query).then(function(p) { showResults(p, query); });
+              }
+            })
+            .catch(function() {
+              // Backend unreachable — use Shopify native
+              shopifySearch(query)
+                .then(function(p) { showResults(p, query); })
+                .catch(function() { showResults([], query); });
+            });
+          } else {
+            // No app origin configured — go straight to Shopify native search
+            shopifySearch(query)
+              .then(function(p) { showResults(p, query); })
+              .catch(function() { showResults([], query); });
+          }
         }
 
         trigger.addEventListener('click', openModal);
         closeBtn.addEventListener('click', closeModal);
         modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
-        
+
         input.addEventListener('input', function(e) {
           if (searchTimeout) clearTimeout(searchTimeout);
-          searchTimeout = setTimeout(() => doSearch(e.target.value), 350);
+          searchTimeout = setTimeout(function() { doSearch(e.target.value); }, 350);
         });
 
         document.addEventListener('keydown', function(e) {

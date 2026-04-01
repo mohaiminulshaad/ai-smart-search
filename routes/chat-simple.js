@@ -159,7 +159,7 @@ When listing products:
  */
 async function getProducts(shopDomain, query = null) {
   try {
-    const response = await axios.get('http://localhost:3000/api/products', {
+    const response = await axios.get(`${process.env.HOST || 'http://localhost:3000'}/api/products`, {
       headers: { 'X-Shop-Domain': shopDomain }
     });
 

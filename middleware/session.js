@@ -7,11 +7,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export function verifySessionToken(req, res, next) {
-  console.log('[verifySessionToken] Path:', req.path);
   const authHeader = req.headers.authorization || '';
-  console.log('[verifySessionToken] Auth header:', authHeader);
   if (!authHeader.startsWith('Bearer ')) {
-    console.log('[verifySessionToken] Missing token');
     return res.status(401).json({ detail: 'Missing session token' });
   }
   const token = authHeader.slice(7);
@@ -20,11 +17,9 @@ export function verifySessionToken(req, res, next) {
       algorithms: ['HS256'],
       clockTolerance: 10,
     });
-    console.log('[verifySessionToken] Payload:', payload);
     req.shopifySession = payload;
     next();
   } catch (err) {
-    console.log('[verifySessionToken] Token error:', err.message);
     const msg = err.name === 'TokenExpiredError'
       ? 'Session token expired'
       : `Invalid session token: ${err.message}`;
@@ -37,11 +32,7 @@ export function verifySessionToken(req, res, next) {
  * App Bridge v4 sets payload.dest = "https://shop.myshopify.com"
  */
 export function extractShop(req) {
-  console.log('[extractShop] session:', req.shopifySession);
   const dest = req.shopifySession?.dest;
-  console.log('[extractShop] dest:', dest);
   if (dest) return dest.replace('https://', '');
-  const shop = req.query.shop || '';
-  console.log('[extractShop] query shop:', shop);
-  return shop;
+  return req.query.shop || '';
 }

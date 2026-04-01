@@ -478,7 +478,41 @@ Instructions:
 });
 
 /**
+ * Fallback: query Shopify's Storefront predictive search API (no auth required).
+ * Returns results in the same shape as the vector search response.
+ */
+async function shopifyPredictiveSearch(shopDomain, query, limit) {
+  const url = `https://${shopDomain}/search/suggest.json?q=${encodeURIComponent(query)}&resources[type]=product&resources[limit]=${limit}`;
+  const resp = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!resp.ok) throw new Error(`Shopify search responded ${resp.status}`);
+  const data = await resp.json();
+  const products = data?.resources?.results?.products ?? [];
+  return products.map(p => {
+    // Shopify returns price as a decimal string in store currency (e.g. "19.99" = $19.99)
+    const rawPrice = p.price ?? p.price_min ?? null;
+    const priceMin = rawPrice !== null ? parseFloat(rawPrice) : null;
+    return {
+      productId: null,
+      title: p.title,
+      handle: p.handle || (p.url ?? '').replace('/products/', ''),
+      vendor: p.vendor ?? '',
+      productType: '',
+      price: { min: priceMin, max: priceMin },
+      available: true,
+      inventory: null,
+      tags: [],
+      image: p.featured_image?.url ?? p.image ?? null,
+      score: null,
+      description: '',
+      source: 'shopify',
+    };
+  });
+}
+
+/**
  * POST /api/search/products - Direct product search endpoint
+ * Tries AI vector search first; on failure or empty results falls back to
+ * Shopify's native Storefront predictive search (always available, no auth).
  */
 router.post('/search/products', async (req, res) => {
   const { query, filters = {}, limit = 10 } = req.body;
@@ -488,8 +522,11 @@ router.post('/search/products', async (req, res) => {
     return res.status(400).json({ error: 'Query and X-Shop-Domain header required' });
   }
 
+  // ── 1. Try vector search ──────────────────────────────────────────────────
+  let vectorResults = [];
+  let vectorError = null;
   try {
-    const results = await vectorStore.search(shopDomain, query, {
+    vectorResults = await vectorStore.search(shopDomain, query, {
       limit,
       filters: {
         availableOnly: filters.availableOnly,
@@ -500,30 +537,48 @@ router.post('/search/products', async (req, res) => {
         tag: filters.tag,
       },
     });
+  } catch (err) {
+    vectorError = err.message;
+    console.warn('[Search] Vector search failed, falling back to Shopify:', err.message);
+  }
 
-    res.json({
+  // ── 2. Return vector results if found ────────────────────────────────────
+  if (vectorResults.length > 0) {
+    return res.json({
       query,
-      results: results.map(r => ({
+      source: 'vector',
+      results: vectorResults.map(r => ({
         productId: r.product_id,
         title: r.title,
+        handle: r.handle,
         vendor: r.vendor,
         productType: r.product_type,
-        price: {
-          min: r.price_min,
-          max: r.price_max,
-        },
+        price: { min: r.price_min, max: r.price_max },
         available: r.available,
         inventory: r.total_inventory,
         tags: r.tags,
         image: r.image_url,
         score: r.score,
-        description: r.text.substring(0, 200),
+        description: r.text ? r.text.substring(0, 200) : '',
+        source: 'vector',
       })),
-      count: results.length,
+      count: vectorResults.length,
     });
-  } catch (error) {
-    console.error('[Search] Error:', error);
-    res.status(500).json({ error: 'Search failed', message: error.message });
+  }
+
+  // ── 3. Fall back to Shopify native search ────────────────────────────────
+  try {
+    const fallbackResults = await shopifyPredictiveSearch(shopDomain, query, limit);
+    return res.json({
+      query,
+      source: 'shopify',
+      results: fallbackResults,
+      count: fallbackResults.length,
+      vectorError,
+    });
+  } catch (fallbackErr) {
+    console.error('[Search] Shopify fallback also failed:', fallbackErr.message);
+    return res.json({ query, source: 'none', results: [], count: 0, vectorError });
   }
 });
 

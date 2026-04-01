@@ -4,7 +4,7 @@ export interface DisplaySettings {
   enabled: boolean;
   displayOn: 'all' | 'products' | 'cart' | 'home';
   mobileVisible: boolean;
-  widgetType: 'bubble' | 'embed';
+  widgetType: 'bubble' | 'embed' | 'both';
 }
 
 export const displaySettingsApi = {

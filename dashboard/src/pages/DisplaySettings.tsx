@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Page, Card, FormLayout, Select, Button, BlockStack,
-  InlineStack, Text, Banner, SkeletonBodyText, Checkbox, RadioButton,
+  InlineStack, Text, Banner, SkeletonBodyText, Checkbox, RadioButton, List,
 } from '@shopify/polaris';
 import { TitleBar, useAppBridge } from '@shopify/app-bridge-react';
 import { displaySettingsApi, type DisplaySettings as DisplaySettingsType } from '../api/display-settings';
@@ -11,11 +11,6 @@ const DISPLAY_OPTIONS = [
   { label: 'Home Page Only', value: 'home' },
   { label: 'Product Pages',  value: 'products' },
   { label: 'Cart Page',      value: 'cart' },
-];
-
-const WIDGET_TYPE_OPTIONS = [
-  { label: 'Floating Bubble (Classic)',      value: 'bubble' },
-  { label: 'Search Icon (App Embed)',       value: 'embed' },
 ];
 
 export default function DisplaySettings() {
@@ -44,6 +39,9 @@ export default function DisplaySettings() {
 
   if (loading) return <Page title="Display Settings"><Card><SkeletonBodyText lines={6} /></Card></Page>;
 
+  const showEmbedInstructions = settings.widgetType === 'embed' || settings.widgetType === 'both';
+  const showBubbleInstructions = settings.widgetType === 'bubble' || settings.widgetType === 'both';
+
   return (
     <Page title="Display Settings" subtitle="Control search widget visibility on your storefront">
       <TitleBar title="Display Settings">
@@ -52,6 +50,7 @@ export default function DisplaySettings() {
       <BlockStack gap="500">
         {error && <Banner tone="critical" onDismiss={() => setError('')}>{error}</Banner>}
 
+        {/* ── Visibility ── */}
         <Card>
           <BlockStack gap="400">
             <Text as="h3" variant="headingMd">Search Widget Visibility</Text>
@@ -68,42 +67,81 @@ export default function DisplaySettings() {
           </BlockStack>
         </Card>
 
+        {/* ── Widget Type ── */}
         <Card>
           <BlockStack gap="400">
             <Text as="h3" variant="headingMd">Widget Type</Text>
+            <Text as="p" variant="bodySm" tone="subdued">
+              Choose how the search widget appears on your storefront.
+            </Text>
+
             <RadioButton
-              label="Floating Bubble (Classic)"
-              helpText="Shows a floating button that opens search popup"
+              label="Floating Bubble"
+              helpText="A floating circle button fixed at the bottom corner of every page. No theme changes needed."
               checked={settings.widgetType === 'bubble'}
               onChange={() => setSettings(p => ({ ...p, widgetType: 'bubble' }))}
+              disabled={!settings.enabled}
             />
+
             <RadioButton
-              label="Search Icon (App Embed)"
-              helpText="Add a search icon to any section in your theme. Search for section in theme editor."
+              label="Embed in Theme (Header / Footer)"
+              helpText="A search icon placed directly inside your theme header or footer via App Embeds."
               checked={settings.widgetType === 'embed'}
               onChange={() => setSettings(p => ({ ...p, widgetType: 'embed' }))}
+              disabled={!settings.enabled}
             />
-            <Banner tone="info">
-              After selecting, <strong>click Save Display Settings button</strong> at the bottom to save your changes!
-            </Banner>
+
+            <RadioButton
+              label="Both — Bubble + Theme Embed"
+              helpText="Show the floating bubble AND a search icon inside your theme at the same time."
+              checked={settings.widgetType === 'both'}
+              onChange={() => setSettings(p => ({ ...p, widgetType: 'both' }))}
+              disabled={!settings.enabled}
+            />
+
+            {/* Instructions for embed modes */}
+            {showEmbedInstructions && settings.enabled && (
+              <Banner tone="info" title="How to enable the Theme Embed search icon">
+                <Text as="p" variant="bodySm">To show the search icon in your header or footer:</Text>
+                <List type="number">
+                  <List.Item>Go to your Shopify Admin → <strong>Online Store → Themes</strong></List.Item>
+                  <List.Item>Click <strong>Customize</strong> on your active theme</List.Item>
+                  <List.Item>In the left sidebar, click <strong>App embeds</strong> (the puzzle piece icon)</List.Item>
+                  <List.Item>Find <strong>Smart Search</strong> and toggle it <strong>ON</strong></List.Item>
+                  <List.Item>Click <strong>Save</strong> in the theme editor</List.Item>
+                </List>
+              </Banner>
+            )}
+
+            {/* Instructions for bubble-only mode */}
+            {showBubbleInstructions && settings.enabled && settings.widgetType === 'bubble' && (
+              <Banner tone="success" title="Floating bubble is active">
+                The search bubble will appear automatically on your storefront. No theme changes needed.
+              </Banner>
+            )}
           </BlockStack>
         </Card>
 
+        {/* ── Page Targeting ── */}
         <Card>
           <BlockStack gap="400">
             <Text as="h3" variant="headingMd">Page Targeting</Text>
+            <Text as="p" variant="bodySm" tone="subdued">
+              Controls which pages the <strong>floating bubble</strong> appears on. The theme embed appears on all pages.
+            </Text>
             <FormLayout>
               <Select
-                label="Display search widget on"
+                label="Show floating bubble on"
                 options={DISPLAY_OPTIONS}
                 value={settings.displayOn}
                 onChange={v => setSettings(p => ({ ...p, displayOn: v as DisplaySettingsType['displayOn'] }))}
-                disabled={!settings.enabled}
+                disabled={!settings.enabled || settings.widgetType === 'embed'}
               />
             </FormLayout>
           </BlockStack>
         </Card>
 
+        {/* ── Mobile ── */}
         <Card>
           <BlockStack gap="400">
             <Text as="h3" variant="headingMd">Mobile</Text>
@@ -114,7 +152,7 @@ export default function DisplaySettings() {
               disabled={!settings.enabled}
             />
             <Text as="p" variant="bodySm" tone="subdued">
-              When disabled, the search widget will only appear on desktop browsers.
+              When disabled, the floating bubble will only appear on desktop browsers.
             </Text>
           </BlockStack>
         </Card>

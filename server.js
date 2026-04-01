@@ -125,7 +125,7 @@ app.listen(PORT, async () => {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📍 Host : ${process.env.HOST || `http://localhost:${PORT}`}
 🔧 Mode : ${isDev ? 'development (Vite proxy)' : 'production (dist)'}
-🗄️  DB   : ${process.env.DATABASE_URL}
+🗄️  DB   : ${isDev ? process.env.DATABASE_URL : '***'}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   `);
 

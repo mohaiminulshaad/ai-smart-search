@@ -171,7 +171,6 @@ router.get('/', async (req, res) => {
     // Embedded re-open: Shopify sends id_token JWT — verify it to confirm identity
     if (embedded === '1' && id_token) {
       try {
-       // const decoded   = jwt.verify(id_token, process.env.SHOPIFY_API_SECRET, { algorithms: ['HS256'] });
        const decoded = jwt.verify(id_token, process.env.SHOPIFY_API_SECRET, {
           algorithms: ['HS256'],
           clockTolerance: 30,   // seconds

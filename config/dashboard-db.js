@@ -16,6 +16,10 @@ function isMissingRelationError(err) {
   return Boolean(err && (err.code === '42P01' || /relation .* does not exist/i.test(err.message || '')));
 }
 
+function isMissingColumnError(err) {
+  return Boolean(err && (err.code === '42703' || /column .* does not exist/i.test(err.message || '')));
+}
+
 // ── Schema migration ──────────────────────────────────────────────────────────
 export async function initDashboardDb() {
   const client = await pool.connect();
@@ -97,9 +101,9 @@ export async function initDashboardDb() {
       CREATE INDEX IF NOT EXISTS idx_chat_messages_session  ON chat_messages(session_id);
 
       -- Safe column additions (idempotent)
-      DO $ BEGIN ALTER TABLE smartsearch_settings ADD COLUMN IF NOT EXISTS active_api_key_id TEXT; END $;
-      DO $ BEGIN ALTER TABLE chat_messages    ADD COLUMN IF NOT EXISTS image_url TEXT; END $;
-      DO $ BEGIN ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS widget_type TEXT NOT NULL DEFAULT 'bubble'; END $;
+      ALTER TABLE smartsearch_settings ADD COLUMN IF NOT EXISTS active_api_key_id TEXT;
+      ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS image_url TEXT;
+      ALTER TABLE display_settings ADD COLUMN IF NOT EXISTS widget_type TEXT NOT NULL DEFAULT 'bubble';
 
       -- Migrate legacy settings table if it exists
       DO $$
@@ -222,25 +226,51 @@ export async function saveSmartSearchSettings(shop, s) {
 
 // ── display_settings ──────────────────────────────────────────────────────────
 export async function getDisplaySettings(shop) {
-  const row = await queryOne('SELECT * FROM display_settings WHERE shop=$1', [shop]);
-  if (!row) return { enabled: true, displayOn: 'all', mobileVisible: true, widgetType: 'bubble' };
-  return {
-    enabled: Boolean(row.enabled),
-    displayOn: row.display_on,
-    mobileVisible: Boolean(row.mobile_visible),
-    widgetType: row.widget_type || 'bubble',
-  };
+  try {
+    const row = await queryOne('SELECT * FROM display_settings WHERE shop=$1', [shop]);
+    if (!row) return { enabled: true, displayOn: 'all', mobileVisible: true, widgetType: 'bubble' };
+    return {
+      enabled: Boolean(row.enabled),
+      displayOn: row.display_on,
+      mobileVisible: Boolean(row.mobile_visible),
+      widgetType: row.widget_type || 'bubble',
+    };
+  } catch (err) {
+    if (!isMissingRelationError(err) && !isMissingColumnError(err)) throw err;
+    await initDashboardDb();
+    const row = await queryOne('SELECT * FROM display_settings WHERE shop=$1', [shop]);
+    if (!row) return { enabled: true, displayOn: 'all', mobileVisible: true, widgetType: 'bubble' };
+    return {
+      enabled: Boolean(row.enabled),
+      displayOn: row.display_on,
+      mobileVisible: Boolean(row.mobile_visible),
+      widgetType: row.widget_type || 'bubble',
+    };
+  }
 }
 
 export async function saveDisplaySettings(shop, s) {
-  await query(
-    `INSERT INTO display_settings (shop,enabled,display_on,mobile_visible,widget_type,updated_at)
-       VALUES ($1,$2,$3,$4,$5,NOW())
-       ON CONFLICT (shop) DO UPDATE SET
-         enabled=EXCLUDED.enabled, display_on=EXCLUDED.display_on,
-         mobile_visible=EXCLUDED.mobile_visible, widget_type=EXCLUDED.widget_type, updated_at=NOW()`,
-    [shop, s.enabled ?? true, s.displayOn ?? 'all', s.mobileVisible ?? true, s.widgetType ?? 'bubble']
-  );
+  try {
+    await query(
+      `INSERT INTO display_settings (shop,enabled,display_on,mobile_visible,widget_type,updated_at)
+         VALUES ($1,$2,$3,$4,$5,NOW())
+         ON CONFLICT (shop) DO UPDATE SET
+           enabled=EXCLUDED.enabled, display_on=EXCLUDED.display_on,
+           mobile_visible=EXCLUDED.mobile_visible, widget_type=EXCLUDED.widget_type, updated_at=NOW()`,
+      [shop, s.enabled ?? true, s.displayOn ?? 'all', s.mobileVisible ?? true, s.widgetType ?? 'bubble']
+    );
+  } catch (err) {
+    if (!isMissingRelationError(err) && !isMissingColumnError(err)) throw err;
+    await initDashboardDb();
+    await query(
+      `INSERT INTO display_settings (shop,enabled,display_on,mobile_visible,widget_type,updated_at)
+         VALUES ($1,$2,$3,$4,$5,NOW())
+         ON CONFLICT (shop) DO UPDATE SET
+           enabled=EXCLUDED.enabled, display_on=EXCLUDED.display_on,
+           mobile_visible=EXCLUDED.mobile_visible, widget_type=EXCLUDED.widget_type, updated_at=NOW()`,
+      [shop, s.enabled ?? true, s.displayOn ?? 'all', s.mobileVisible ?? true, s.widgetType ?? 'bubble']
+    );
+  }
   return getDisplaySettings(shop);
 }
 

@@ -1,0 +1,18 @@
+name = "Smart Search"
+client_id = "69375e7559a1a639c36a05e6dcc09236"
+application_url = "https://organically-nonphonetic-kayden.ngrok-free.dev"
+embedded = false
+
+[access_scopes]
+scopes = "read_files,write_files,read_inventory,read_orders,read_products,write_products,read_script_tags,write_script_tags"
+
+[auth]
+redirect_urls = [
+  "https://organically-nonphonetic-kayden.ngrok-free.dev/auth/callback"
+]
+
+[webhooks]
+api_version = "2024-01"
+
+[pos]
+embedded = false

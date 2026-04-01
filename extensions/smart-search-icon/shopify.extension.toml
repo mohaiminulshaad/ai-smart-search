@@ -1,0 +1,7 @@
+api_version = "2024-01"
+
+[[extensions]]
+uid = "6c8b781c-0435-76b6-beba-550e6518afed00e7fca7"
+type = "theme"
+name = "Smart Search"
+handle = "smart-search-icon"
